@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
+
+enum service_status {
+  waiting
+  in_service
+  completed
+}
+
+enum payment_status {
+  unpaid
+  paid
+}
+
+model Users{
+  id Int @id @default(autoincrement())
+  username String @unique
+  password String
+  role Role @default(ADMIN)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+
+  @@map("users")
+}
+
+model Customer {
+  id             Int      @id @default(autoincrement())
+  name           String
+  phone          Int
+  profilePicture String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now())
+  orders Order[]
+
+  @@map("customers")
+}
+
+model Barber {
+    id          Int      @id @default(autoincrement())
+  name        String
+  phone       Int
+  picture     String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+  orders Order[]
+
+  @@map("barbers")
+}
+
+model Order{
+  id Int @id @default(autoincrement())
+  customerId Int
+  barberId Int
+  service_status service_status @default(waiting)
+  payement_status payment_status @default(unpaid)
+  notes String
+  checkin_time DateTime @default(now())
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+  orderItems OrderItems[]
+  payment Payment[]
+  invoice Invoice[]
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  barber Barber @relation(fields: [barberId], references: [id])
+  
+
+  @@map("orders")
+
+}
+
+model OrderItems{
+  id Int @id @default(autoincrement())
+  orderId Int
+  serviceId Int
+  duration Int
+  price Int
+  qty Int
+  subtotal Int
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+  service Services @relation(fields: [serviceId], references: [id])
+
+  @@map("orderItems")
+}
+
+model Services {
+  id Int @id @default(autoincrement())
+  name String
+  duration Int
+  price Int
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+  orderItems OrderItems[]
+
+  @@map("services")
+}
+
+model Payment {
+  id Int @id @default(autoincrement())
+  orderId Int @unique
+  amountReceived Int
+  change Int @default(0)
+  paymentMethod String
+  paidAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("payment")
+}
+
+model Invoice {
+  id Int @id @default(autoincrement())
+  orderId Int @unique
+  invoiceNo String @unique
+  totalAmount Int
+  issuedAt DateTime @default(now())
+  paidAt DateTime?
+  status String @default("unpaid")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("invoice")
+}
