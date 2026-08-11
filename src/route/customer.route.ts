@@ -6,7 +6,7 @@ const route = Router();
 
 route.post("/register", upload.single('profilePicture'), registerCustomer);
 route.get("/", getAllCustomer);
-route.get("/:id", getCustomerDetails);
+route.get("/:id",upload.single('profilePicture'), getCustomerDetails);
 route.patch("/:id", updateCustomer);
 route.delete("/:id", deleteCustomer);
 

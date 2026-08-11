@@ -44,6 +44,9 @@ export const registerCustomer = async (req: Request, res: Response, next: NextFu
 
 export const getAllCustomer = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        // const page = parseInt(req.query.page as string) || 1;
+        // const limit = parseInt(req.query.limit as string) || 5; 
+
         const allCustomer = await prisma.customer.findMany()
 
         return res.status(200).json({
@@ -84,6 +87,14 @@ export const updateCustomer = async (req: Request, res: Response, next: NextFunc
         const { id } = req.params;
         const { name, phone } = req.body;
 
+        let profilePicture: string | undefined
+
+        if (req.file) {
+            const pictureBuffer = req.file.buffer;
+            const result = await uploadToCloudinary(pictureBuffer);
+            profilePicture = result.secure_url;
+        }
+
         const checkCustomer = await prisma.customer.findUnique({
             where: { id: Number(id) }
         })
@@ -98,7 +109,8 @@ export const updateCustomer = async (req: Request, res: Response, next: NextFunc
             where: checkCustomer,
             data: {
                 name,
-                phone
+                phone,
+                ...(profilePicture && { profilePicture }),
             }
         })
 
