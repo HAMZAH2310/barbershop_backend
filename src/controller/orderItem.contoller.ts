@@ -1,6 +1,27 @@
 import { Request, Response, NextFunction } from "express"
 import { prisma } from "../../lib/prisma"
 
+
+export const getAllOrderItems = async (req: Request, res: Response, next: NextFunction) => {
+   try{
+    const {orderId} = req.query;
+
+    const where = orderId ? {orderId: Number(orderId)}: {};
+
+    const items = await prisma.orderItems.findMany({
+        where,
+        include: {service: true}
+    })
+
+    return res.status(200).json({
+        message: "Success",
+        data: items,
+    })
+   }catch(err: any){
+    next(err)
+   }
+}
+
 export const createItemOrder = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { orderId, serviceId, duration, price, qty, subtotal } = req.body;
