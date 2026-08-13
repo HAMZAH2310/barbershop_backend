@@ -1,0 +1,26 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const customer_route_1 = __importDefault(require("./customer.route"));
+const barber_route_1 = __importDefault(require("./barber.route"));
+const services_route_1 = __importDefault(require("./services.route"));
+const order_route_1 = __importDefault(require("./order.route"));
+const auht_route_1 = __importDefault(require("./auht.route"));
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const orderItem_route_1 = __importDefault(require("./orderItem.route"));
+const payment_route_1 = __importDefault(require("./payment.route"));
+const invoice_route_1 = __importDefault(require("./invoice.route"));
+const app = (0, express_1.Router)();
+app.use("/auth", auht_route_1.default);
+app.use(auth_middleware_1.authentication);
+app.use("/customer", customer_route_1.default);
+app.use("/barber", barber_route_1.default);
+app.use("/services", services_route_1.default);
+app.use("/orders", order_route_1.default);
+app.use("/order-items", orderItem_route_1.default);
+app.use("/payment", payment_route_1.default);
+app.use("/invoice", invoice_route_1.default);
+exports.default = app;

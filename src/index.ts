@@ -6,7 +6,7 @@ import errorHandler from "./middleware/error.handling";
 
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = Number(process.env.PORT) || 3001;
 
 app.use(cors({ origin: "*" }));
 
@@ -15,6 +15,6 @@ app.use(express.json());
 app.use("/api", mainRoute)
 app.use(errorHandler);
 
-app.listen(PORT, () => (
+app.listen(PORT, '0.0.0.0', () => (
     console.log(`Server is Running on ${PORT}`)
 ));

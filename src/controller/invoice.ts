@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express"
 import { prisma } from "../../lib/prisma"
-import { error } from "node:console";
 
 export const getInvoiceById = async (req: Request, res: Response, next: NextFunction) => {
     const { id } = req.params;
@@ -25,7 +24,7 @@ export const getInvoiceById = async (req: Request, res: Response, next: NextFunc
         }
 
         res.status(200).json({ invoice })
-    } catch {
+    } catch (error) {
         next(error)
     }
 }
@@ -44,7 +43,9 @@ export const getAllInvoice = async (req: Request, res: Response, next: NextFunct
             orderBy: { issuedAt: "desc" }
         });
 
-        return res.status(200).json({ invoice: getAllinvoice })
+        return res.status(200).json({
+            data: { getAllinvoice }
+        })
     } catch (error) {
         next(error)
     }

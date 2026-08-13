@@ -57,7 +57,7 @@ export const createPayment = async (req: Request, res: Response, next: NextFunct
             return res.status(400).json({ message: "Order belum selesai! Tidak bisa melakukan pembayaran!" })
         }
 
-        const totalOrder = order.orderItems.reduce((sum, item) => sum + item.subtotal, 0);
+        const totalOrder = order.orderItems.reduce((sum: number, item: {price: number}) => sum + item.price, 0);
 
         if (amountRecived < totalOrder) {
             return res.status(400).json({ message: "Uang yang dibayarkan tidak cukup!" })

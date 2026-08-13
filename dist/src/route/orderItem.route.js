@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const orderItem_contoller_1 = require("../controller/orderItem.contoller");
+const route = (0, express_1.Router)();
+route.post("/", orderItem_contoller_1.createItemOrder);
+route.get("/:id", orderItem_contoller_1.getOrderItems);
+route.get("/", orderItem_contoller_1.getAllOrderItems);
+route.patch("/:id", orderItem_contoller_1.updateItemOrder);
+route.delete("/:id", orderItem_contoller_1.deleteOrderItem);
+exports.default = route;
