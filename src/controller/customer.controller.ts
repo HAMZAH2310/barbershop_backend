@@ -1,7 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { NextFunction, Request, Response } from "express";
 import { uploadToCloudinary } from "../../lib/uploadtoCloudinary";
-import "multer";
+
 
 export const registerCustomer = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -106,10 +106,10 @@ export const updateCustomer = async (req: Request, res: Response, next: NextFunc
         }
 
         const updatedCustomer = await prisma.customer.update({
-            where: checkCustomer,
+            where: {id: Number(id)},
             data: {
-                name,
-                phone,
+                name: name,
+                phone: phone ? Number(phone) : undefined,
                 ...(profilePicture && { profilePicture }),
             }
         })
