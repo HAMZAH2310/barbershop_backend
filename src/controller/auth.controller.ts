@@ -60,29 +60,12 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             { expiresIn: "1d" }
         );
 
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: false,
-            sameSite: "lax",
-            maxAge: 24 * 60 * 60 * 1000,
-        })
-
         return res.status(200).json({
             message: "Succesfully login",
-            data: {
-                id: user.id,
-                username: user.username,
-                role: user.role,
-            }
+            data: { token }
         })
-
 
     } catch (error) {
         next(error)
     }
-}
-
-export const logout = async (req: Request, res: Response) => {
-    res.clearCookie("token");
-    res.json({ message: "Logout berhasil" });
 }

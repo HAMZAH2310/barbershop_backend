@@ -8,15 +8,8 @@ import { authentication } from "../middleware/auth.middleware";
 import orderItemRoute from "./orderItem.route";
 import paymentRoute from "./payment.route";
 import invoiceRoute from "./invoice.route";
-import cookieParser from "cookie-parser";
-import cors from "cors";
 
 const app = Router();
-
-app.use(cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    credentials: true,
-}))
 
 app.use("/auth", authRoute);
 app.use(authentication)
