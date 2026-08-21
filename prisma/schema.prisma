@@ -33,7 +33,7 @@ model Users{
   id Int @id @default(autoincrement())
   username String @unique
   password String
-  role Role @default(ADMIN)
+  role Role @default(CUSTOMER)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
 
@@ -108,6 +108,7 @@ model Services {
   name String
   duration Int
   price Int
+  image String?
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
   orderItems OrderItems[]

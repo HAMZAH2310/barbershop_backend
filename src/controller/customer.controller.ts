@@ -30,7 +30,7 @@ export const registerCustomer = async (req: Request, res: Response, next: NextFu
         })
 
         return res.status(201).json({
-            message: "SUccesfully create customer",
+            message: "Successfully create customer",
             data: {
                 id: newCustomer.id,
                 name: newCustomer.name,
@@ -106,7 +106,7 @@ export const updateCustomer = async (req: Request, res: Response, next: NextFunc
         }
 
         const updatedCustomer = await prisma.customer.update({
-            where: {id: Number(id)},
+            where: { id: Number(id) },
             data: {
                 name: name,
                 phone: phone ? Number(phone) : undefined,
@@ -138,7 +138,7 @@ export const deleteCustomer = async (req: Request, res: Response, next: NextFunc
         }
 
         const deletedCustomer = await prisma.customer.delete({
-            where: checkCustomer
+            where: { id: Number(id) },
         })
 
         return res.status(204).json({
