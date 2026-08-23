@@ -6,7 +6,7 @@ import { isAdmin } from "../middleware/authorization.middleware";
 const route = Router();
 
 route.get("/", getAllServices);
-route.post("/", upload.single("image"), CreateServices);
+route.post("/", isAdmin, upload.single("image"), CreateServices);
 route.patch("/:id", isAdmin, upload.single("image"), updateService);
 route.delete("/:id", isAdmin, deletedService);
 

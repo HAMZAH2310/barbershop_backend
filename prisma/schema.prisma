@@ -31,9 +31,11 @@ enum payment_status {
 
 model Users{
   id Int @id @default(autoincrement())
-  username String @unique
+  username String
+  email String @unique
   password String
   role Role @default(CUSTOMER)
+  isVerified Boolean @default(false)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
 
@@ -43,6 +45,7 @@ model Users{
 model Customer {
   id             Int      @id @default(autoincrement())
   name           String
+  email          String @unique
   phone          Int
   profilePicture String?
   created_at     DateTime @default(now())
@@ -144,3 +147,4 @@ model Invoice {
 
   @@map("invoice")
 }
+

@@ -3,7 +3,7 @@ import customerRoute from "./customer.route";
 import barberRoute from "./barber.route";
 import services from "./services.route";
 import orderRoute from "./order.route";
-import authRoute from "./auht.route";
+import authRoute from "./auth.route";
 import { authentication } from "../middleware/auth.middleware";
 import orderItemRoute from "./orderItem.route";
 import paymentRoute from "./payment.route";
