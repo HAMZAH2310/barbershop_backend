@@ -3,41 +3,65 @@ import { prisma } from "../../lib/prisma"
 
 
 export const getAllOrderItems = async (req: Request, res: Response, next: NextFunction) => {
-   try{
-    const {orderId} = req.query;
+    try {
+        const { orderId } = req.query;
 
-    const where = orderId ? {orderId: Number(orderId)}: {};
+        const where = orderId ? { orderId: Number(orderId) } : {};
 
-    const items = await prisma.orderItems.findMany({
-        where,
-        include: {service: true}
-    })
+        const items = await prisma.orderItems.findMany({
+            where,
+            include: { service: true }
+        })
 
-    return res.status(200).json({
-        message: "Success",
-        data: items,
-    })
-   }catch(err: any){
-    next(err)
-   }
+        return res.status(200).json({
+            message: "Success",
+            data: items,
+        })
+    } catch (err: any) {
+        next(err)
+    }
 }
 
 export const createItemOrder = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { orderId, serviceId, duration, price, qty, subtotal } = req.body;
+        const { orderId, serviceId, qty } = req.body;
 
-        if (!orderId || !serviceId || !duration || !price || !qty) {
-            return res.status(400).json({ message: "Semua Field harus diisi" })
+        if (!orderId || !serviceId || !qty) {
+            return res.status(400).json({ message: "orderId, serviceId, dan qty harus diisi" });
         }
+
+        const qtyNum = Number(qty);
+
+        if (isNaN(qtyNum) || qtyNum <= 0) {
+            return res.status(400).json({ message: "qty harus berupa angka lebih dari 0" });
+        }
+
+        const service = await prisma.services.findUnique({
+            where: { id: Number(serviceId) },
+        })
+
+        if (!service) {
+            return res.status(404).json({ message: "Service tidak ditemukan" });
+        }
+
+        const order = await prisma.order.findUnique({
+            where: { id: Number(orderId) }
+        })
+
+        if (!order) {
+            return res.status(404).json({ message: "Order tidak ditemukan" });
+        }
+
+        const subtotal = service.price * qtyNum;
 
         const newItemOrder = await prisma.orderItems.create({
             data: {
                 orderId,
                 serviceId,
-                duration,
-                price,
+                duration: service.duration,
+                price: service.price,
                 qty,
-                subtotal: price * qty,
+                subtotal,
             }
         })
 

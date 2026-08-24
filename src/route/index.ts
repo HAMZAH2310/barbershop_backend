@@ -8,17 +8,19 @@ import { authentication } from "../middleware/auth.middleware";
 import orderItemRoute from "./orderItem.route";
 import paymentRoute from "./payment.route";
 import invoiceRoute from "./invoice.route";
+import midtransRoute from "./midtrans.route";
 
 const app = Router();
 
 app.use("/auth", authRoute);
+app.use("/midtrans", midtransRoute);
 app.use(authentication)
 
 app.use("/customer", customerRoute);
 app.use("/barber", barberRoute);
-app.use("/services", services);
-app.use("/orders", orderRoute);
-app.use("/order-items", orderItemRoute);
+app.use("/service", services);
+app.use("/order", orderRoute);
+app.use("/order-item", orderItemRoute);
 app.use("/payment", paymentRoute);
 app.use("/invoice", invoiceRoute)
 

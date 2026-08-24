@@ -5,7 +5,7 @@ import { uploadToCloudinary } from "../../lib/uploadtoCloudinary";
 
 export const registerCustomer = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { name, phone } = req.body;
+        const { name, phone, email } = req.body;
 
         let profilePicture: string | undefined
 
@@ -15,7 +15,7 @@ export const registerCustomer = async (req: Request, res: Response, next: NextFu
             profilePicture = result.secure_url;
         }
 
-        if (!name || !phone) {
+        if (!name || !phone || !email) {
             return res.status(400).json({
                 message: "Field name dan phone harus diisi"
             })
@@ -26,6 +26,7 @@ export const registerCustomer = async (req: Request, res: Response, next: NextFu
                 name: name,
                 phone: Number(phone),
                 ...(profilePicture && { profilePicture }),
+                email: email,
             }
         })
 

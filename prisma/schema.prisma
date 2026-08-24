@@ -26,7 +26,22 @@ enum service_status {
 
 enum payment_status {
   unpaid
+  pending     
   paid
+  failed
+  expired
+  cancelled
+  refunded
+}
+
+enum midtrans_status {
+  pending
+  settlement
+  capture
+  deny
+  cancel
+  expire
+  refund
 }
 
 model Users{
@@ -73,13 +88,14 @@ model Order{
   barberId Int
   service_status service_status @default(waiting)
   payement_status payment_status @default(unpaid)
-  notes String
+  notes String?
   checkin_time DateTime @default(now())
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
   orderItems OrderItems[]
   payment Payment[]
   invoice Invoice[]
+  midtransTransaction MidtransTransaction[]
 
   customer Customer @relation(fields: [customerId], references: [id])
   barber Barber @relation(fields: [barberId], references: [id])
@@ -148,3 +164,26 @@ model Invoice {
   @@map("invoice")
 }
 
+model MidtransTransaction {
+   id                Int              @id @default(autoincrement())
+   orderId           Int
+   midtransOrderId   String           @unique
+   transactionId     String?          @unique
+   grossAmount       Int
+   paymentType       String?
+   transactionStatus midtrans_status @default(pending)
+   fraudStatus       String?
+   vaNumber          String?
+   bank              String?
+   snapToken         String?
+   redirectUrl       String?
+   transactionTime   DateTime?
+   expiryTime        DateTime?
+   rawResponse       Json? 
+   createdAt         DateTime         @default(now())
+   updatedAt         DateTime         @updatedAt
+
+   order Order @relation(fields: [orderId], references: [id])
+
+   @@map("midtrans_transactions")
+}
