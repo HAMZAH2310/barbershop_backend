@@ -5,9 +5,25 @@ import { uploadToCloudinary } from "../../lib/uploadtoCloudinary";
 
 export const registerCustomer = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { name, phone, email } = req.body;
+        const { phone, userId } = req.body;
 
-        let profilePicture: string | undefined
+        if (!phone || !userId) {
+            return res.status(400).json({
+                message: "Field userId dan phone harus diisi"
+            });
+        }
+
+        const user = await prisma.users.findUnique({
+            where: { id: Number(userId) }
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User tidak ditemukan"
+            });
+        }
+
+        let profilePicture: string | undefined;
 
         if (req.file) {
             const pictureBuffer = req.file.buffer;
@@ -15,20 +31,14 @@ export const registerCustomer = async (req: Request, res: Response, next: NextFu
             profilePicture = result.secure_url;
         }
 
-        if (!name || !phone || !email) {
-            return res.status(400).json({
-                message: "Field name dan phone harus diisi"
-            })
-        };
-
         const newCustomer = await prisma.customer.create({
             data: {
-                name: name,
+                name: user.username,
                 phone: Number(phone),
+                email: user.email,
                 ...(profilePicture && { profilePicture }),
-                email: email,
             }
-        })
+        });
 
         return res.status(201).json({
             message: "Successfully create customer",
@@ -36,12 +46,13 @@ export const registerCustomer = async (req: Request, res: Response, next: NextFu
                 id: newCustomer.id,
                 name: newCustomer.name,
                 phone: newCustomer.phone,
+                profilePicture: newCustomer.profilePicture
             }
         });
     } catch (error) {
-        next(error)
+        next(error);
     }
-}
+};
 
 export const getAllCustomer = async (req: Request, res: Response, next: NextFunction) => {
     try {

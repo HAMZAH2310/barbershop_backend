@@ -44,6 +44,12 @@ enum midtrans_status {
   refund
 }
 
+enum barber_status {
+  available
+  working
+  on_break
+}
+
 model Users{
   id Int @id @default(autoincrement())
   username String
@@ -75,6 +81,7 @@ model Barber {
   name        String
   phone       Int
   picture     String?
+  status barber_status @default(available)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
   orders Order[]
@@ -86,6 +93,7 @@ model Order{
   id Int @id @default(autoincrement())
   customerId Int
   barberId Int
+  queueNumber Int?
   service_status service_status @default(waiting)
   payement_status payment_status @default(unpaid)
   notes String?

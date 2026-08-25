@@ -52,3 +52,38 @@ export const getAllBarber = async (req: Request, res: Response, next: NextFuncti
         next(error)
     }
 }
+
+export const updateStatusBarber = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        const validStatus = ['available', 'working', 'on break'];
+        if (!status || !validStatus.includes(status)) {
+            return res.status(400).json({
+                message: "Status harus salah satu dari: available, working, on_break"
+            });
+        }
+
+        const barber = await prisma.barber.findUnique({
+            where: { id: Number(id) },
+        })
+
+        if (!barber) {
+            return res.status(404).json({ message: "Barber tidak ditemukan" });
+        }
+
+        const updatedBarber = await prisma.barber.update({
+            where: { id: barber.id },
+            data: { status },
+        })
+
+        return res.status(200).json({
+            message: "Status barber berhasil diupdate",
+            data: updatedBarber
+        });
+
+    } catch (err: any) {
+        next(err)
+    }
+}
