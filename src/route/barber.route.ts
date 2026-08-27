@@ -1,12 +1,15 @@
 import { Router } from "express";
-import { registerBarber, getAllBarber, updateStatusBarber } from "../controller/barber.controller";
+import { registerBarber, getAllBarber, updateStatusBarber, updateBarber, deleteBarber } from "../controller/barber.controller";
 import upload from "../middleware/upload.middleware";
+import { authentication } from "../middleware/auth.middleware";
 import { isAdmin } from "../middleware/authorization.middleware";
 
 const route = Router();
 
-route.post("/", isAdmin, upload.single("picture"), registerBarber);
+route.post("/", authentication, isAdmin, upload.single("picture"), registerBarber);
 route.get("/", getAllBarber);
-route.patch("/:id/status", isAdmin, updateStatusBarber)
+route.patch("/:id/status", authentication, isAdmin, updateStatusBarber);
+route.patch("/:id", authentication, isAdmin, upload.single("picture"), updateBarber);
+route.delete("/:id", authentication, isAdmin, deleteBarber);
 
-export default route
+export default route;

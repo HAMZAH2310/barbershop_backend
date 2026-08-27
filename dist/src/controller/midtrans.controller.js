@@ -1,5 +1,7 @@
 import { prisma } from "../../lib/prisma";
 import { coreApi, snap } from "../lib/midtrans";
+import { calculateMonthlyRevenue } from "../lib/revenue";
+import { io } from "../index";
 export const createTransaction = async (req, res, next) => {
     try {
         const { orderId } = req.body;
@@ -132,11 +134,22 @@ export const handleNotification = async (req, res, next) => {
                     }
                 });
             }
+            const revenue = await calculateMonthlyRevenue();
+            io.emit("revenue:updated", revenue);
         }
         return res.status(200).json({
             message: "Notifikasi berhasil diproses"
         });
     }
     catch (err) {
+    }
+};
+export const getMonthlyRevenu = async (req, res, next) => {
+    try {
+        const data = await calculateMonthlyRevenue();
+        return res.status(200).json({ message: "Success", data });
+    }
+    catch (err) {
+        next(err);
     }
 };

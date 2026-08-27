@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../../lib/prisma";
 import { coreApi, snap } from "../lib/midtrans";
+import { calculateMonthlyRevenue } from "../lib/revenue";
+import { io } from "../index";
 
 export const createTransaction = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -159,6 +161,9 @@ export const handleNotification = async (req: Request, res: Response, next: Next
                     }
                 });
             }
+
+            const revenue = await calculateMonthlyRevenue();
+            io.emit("revenue:updated", revenue);
         }
 
         return res.status(200).json({
@@ -166,5 +171,14 @@ export const handleNotification = async (req: Request, res: Response, next: Next
         })
     } catch (err: any) {
 
+    }
+}
+
+export const getMonthlyRevenu = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const data = await calculateMonthlyRevenue();
+        return res.status(200).json({ message: "Success", data });
+    } catch (err: any) {
+        next(err)
     }
 }
