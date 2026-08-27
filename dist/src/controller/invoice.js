@@ -1,12 +1,8 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllInvoice = exports.getInvoiceById = void 0;
-const prisma_1 = require("../../lib/prisma");
-const node_console_1 = require("node:console");
-const getInvoiceById = async (req, res, next) => {
+import { prisma } from "../../lib/prisma";
+export const getInvoiceById = async (req, res, next) => {
     const { id } = req.params;
     try {
-        const invoice = await prisma_1.prisma.invoice.findUnique({
+        const invoice = await prisma.invoice.findUnique({
             where: { id: Number(id) },
             include: {
                 order: {
@@ -24,14 +20,13 @@ const getInvoiceById = async (req, res, next) => {
         }
         res.status(200).json({ invoice });
     }
-    catch {
-        next(node_console_1.error);
+    catch (error) {
+        next(error);
     }
 };
-exports.getInvoiceById = getInvoiceById;
-const getAllInvoice = async (req, res, next) => {
+export const getAllInvoice = async (req, res, next) => {
     try {
-        const getAllinvoice = await prisma_1.prisma.invoice.findMany({
+        const getAllinvoice = await prisma.invoice.findMany({
             include: {
                 order: {
                     include: {
@@ -42,10 +37,11 @@ const getAllInvoice = async (req, res, next) => {
             },
             orderBy: { issuedAt: "desc" }
         });
-        return res.status(200).json({ invoice: getAllinvoice });
+        return res.status(200).json({
+            data: { getAllinvoice }
+        });
     }
     catch (error) {
         next(error);
     }
 };
-exports.getAllInvoice = getAllInvoice;

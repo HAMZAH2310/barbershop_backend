@@ -1,30 +1,29 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.authentication = void 0;
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const authentication = async (req, res, next) => {
-    const authHeader = req.header("Authorization");
-    const token = authHeader && authHeader.split(" ")[1];
+import jwt from "jsonwebtoken";
+export const authentication = async (req, res, next) => {
+    const token = req.cookies?.token;
     if (!token) {
         return res.status(401).json({
-            message: "Login terlebih dahulu"
+            message: "Login terlebih dahulu",
         });
     }
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
         next();
     }
     catch (error) {
-        if (error instanceof jsonwebtoken_1.default.TokenExpiredError) {
+        if (error instanceof jwt.TokenExpiredError) {
             return res.status(401).json({
-                message: "Token expired"
+                message: "Token kedaluwarsa. Silakan login kembali.",
             });
         }
-        return res.status(500).json({ message: `${error}` });
+        if (error instanceof jwt.JsonWebTokenError) {
+            return res.status(401).json({
+                message: "Token tidak valid.",
+            });
+        }
+        return res.status(500).json({
+            message: "Terjadi kesalahan pada autentikasi.",
+        });
     }
 };
-exports.authentication = authentication;

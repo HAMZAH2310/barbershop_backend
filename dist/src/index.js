@@ -1,17 +1,17 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-require("dotenv/config");
-const express_1 = __importDefault(require("express"));
-const cors_1 = __importDefault(require("cors"));
-const index_1 = __importDefault(require("./route/index"));
-const error_handling_1 = __importDefault(require("./middleware/error.handling"));
-const app = (0, express_1.default)();
-const PORT = process.env.PORT;
-app.use((0, cors_1.default)({ origin: "*" }));
-app.use(express_1.default.json());
-app.use("/api", index_1.default);
-app.use(error_handling_1.default);
-app.listen(PORT, () => (console.log(`Server is Running on ${PORT}`)));
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import mainRoute from "./route/index";
+import errorHandler from "./middleware/error.handling";
+import cookieParser from "cookie-parser";
+const app = express();
+const PORT = Number(process.env.PORT) || 3001;
+app.use(cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
+}));
+app.use(express.json());
+app.use(cookieParser());
+app.use("/api", mainRoute);
+app.use(errorHandler);
+app.listen(PORT, '0.0.0.0', () => (console.log(`Server is Running on ${PORT}`)));

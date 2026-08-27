@@ -1,28 +1,37 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.login = exports.register = void 0;
-const prisma_1 = require("../../lib/prisma");
-const bcrypt_1 = __importDefault(require("bcrypt"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const register = async (req, res, next) => {
+import { prisma } from '../../lib/prisma';
+import bcrypt from 'bcrypt';
+import jwt from "jsonwebtoken";
+import { sendVerificationEmail } from "../../lib/sendVerificationEmail";
+export const register = async (req, res, next) => {
     try {
-        const { username, password, role } = req.body;
+        const { username, email, password, role } = req.body;
+        if (!username || !email || !password) {
+            return res.status(400).json({
+                message: "Semua field harus di isi"
+            });
+        }
         const salt = 10;
-        const hashedPassword = await bcrypt_1.default.hash(password, salt);
-        const newUser = await prisma_1.prisma.users.create({
+        const hashedPassword = await bcrypt.hash(password, salt);
+        const newUser = await prisma.users.create({
             data: {
                 username,
+                email,
                 password: hashedPassword,
-                role
+                role,
+                isVerified: false,
             }
         });
+        try {
+            await sendVerificationEmail(newUser.id, newUser.email);
+        }
+        catch (emailError) {
+            console.error("Gagal kirim email Verifikasi", emailError);
+        }
         return res.status(201).json({
-            message: "Success Register",
+            message: "Registrasi Berhasil, silahkan cek email untuk verifikasi akun",
             data: {
                 username: newUser.username,
+                email: newUser.email,
                 role: newUser.role
             }
         });
@@ -31,8 +40,7 @@ const register = async (req, res, next) => {
         next(error);
     }
 };
-exports.register = register;
-const login = async (req, res, next) => {
+export const login = async (req, res, next) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) {
@@ -40,26 +48,126 @@ const login = async (req, res, next) => {
                 message: "Harus di isi!"
             });
         }
-        const user = await prisma_1.prisma.users.findFirst({ where: { username } });
+        const user = await prisma.users.findFirst({ where: { username } });
         if (!user) {
             return res.status(404).json({
                 message: "User tidak di temukan"
             });
         }
-        const isMatch = await bcrypt_1.default.compare(password, user.password);
+        const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({
                 message: "Password Salah!"
             });
         }
-        const token = jsonwebtoken_1.default.sign({ id: user.id, username: user.username, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
+        if (!user.isVerified) {
+            return res.status(403).json({ message: "Akun belum diverifikasi. Silakan cek email kamu." });
+        }
+        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 24 * 60 * 60 * 1000
+        });
         return res.status(200).json({
             message: "Succesfully login",
-            data: { token }
+            data: {
+                id: user.id,
+                username: user.username,
+                role: user.role
+            }
         });
     }
     catch (error) {
         next(error);
     }
 };
-exports.login = login;
+export const logout = async (req, res, next) => {
+    try {
+        res.clearCookie("token", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+        });
+        return res.status(200).json({
+            message: "Logout berhasil"
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+};
+export const verifyEmail = async (req, res, next) => {
+    try {
+        const { token } = req.query;
+        if (!token || typeof token !== "string") {
+            return res.status(400).json({ message: "Token tidak ditemukan" });
+        }
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        }
+        catch (err) {
+            if (err instanceof jwt.TokenExpiredError) {
+                return res.status(400).json({ message: "Link verifikasi sudah kadaluarsa" });
+            }
+            return res.status(400).json({ message: "Token tidak valid" });
+        }
+        const user = await prisma.users.findUnique({
+            where: { id: decoded.id },
+        });
+        if (!user) {
+            return res.status(404).json({ message: "User tidak ditemukan" });
+        }
+        if (user.isVerified) {
+            return res.status(400).json({ message: "Email sudah terverifikasi" });
+        }
+        await prisma.users.update({
+            where: { id: user.id },
+            data: { isVerified: true },
+        });
+        return res.status(200).json({ message: "Email berhasil diverifikasi" });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+export const resendVerificationEmail = async (req, res, next) => {
+    try {
+        const { email } = req.body;
+        const user = await prisma.users.findUnique({ where: { email } });
+        if (!user) {
+            return res.status(404).json({ message: "User tidak ditemukan" });
+        }
+        if (user.isVerified) {
+            return res.status(400).json({ message: "Email sudah terverifikasi" });
+        }
+        await sendVerificationEmail(user.id, user.email);
+        return res.status(200).json({
+            message: "Link verifikasi baru berhasil dikirim"
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+};
+export const getProfile = async (req, res, next) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        return res.status(200).json({
+            message: "Success",
+            data: {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+            }
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+};

@@ -1,17 +1,33 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.deletedService = exports.updateService = exports.getAllServices = exports.CreateServices = void 0;
-const prisma_1 = require("../../lib/prisma");
-const CreateServices = async (req, res, next) => {
+import { prisma } from "../../lib/prisma";
+import { uploadToCloudinary } from "../../lib/uploadtoCloudinary";
+export const CreateServices = async (req, res, next) => {
     try {
         const { name, duration, price } = req.body;
+        let image;
+        if (req.file) {
+            const pictureBuffer = req.file.buffer;
+            const result = await uploadToCloudinary(pictureBuffer);
+            image = result.secure_url;
+        }
         if (!name || !duration || !price) {
-            return res.status(404).json({
+            return res.status(400).json({
                 message: "Semua field harus di isi"
             });
         }
-        const newService = await prisma_1.prisma.services.create({
-            data: { name, duration, price }
+        const durationNum = Number(duration);
+        const priceNum = Number(price);
+        if (isNaN(durationNum) || isNaN(priceNum)) {
+            return res.status(400).json({
+                message: "Duration dan price harus berupa angka"
+            });
+        }
+        const newService = await prisma.services.create({
+            data: {
+                name,
+                duration: durationNum,
+                price: priceNum,
+                ...(image && { image })
+            }
         });
         return res.status(201).json({
             message: "Create service successfully",
@@ -19,7 +35,8 @@ const CreateServices = async (req, res, next) => {
                 id: newService.id,
                 name: newService.name,
                 duration: newService.duration,
-                price: newService.price
+                price: newService.price,
+                ...(image && { image })
             }
         });
     }
@@ -27,10 +44,9 @@ const CreateServices = async (req, res, next) => {
         next(error);
     }
 };
-exports.CreateServices = CreateServices;
-const getAllServices = async (req, res, next) => {
+export const getAllServices = async (req, res, next) => {
     try {
-        const allServices = await prisma_1.prisma.services.findMany();
+        const allServices = await prisma.services.findMany();
         if (allServices.length === 0) {
             return res.status(200).json({ message: "Data belum ada!" });
         }
@@ -42,34 +58,44 @@ const getAllServices = async (req, res, next) => {
         next(error);
     }
 };
-exports.getAllServices = getAllServices;
-const updateService = async (req, res, next) => {
+export const updateService = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { name, price, duration } = req.body;
-        const services = await prisma_1.prisma.services.findUnique({
+        let image;
+        if (req.file) {
+            const pictureBuffer = req.file.buffer;
+            const result = await uploadToCloudinary(pictureBuffer);
+            image = result.secure_url;
+        }
+        const services = await prisma.services.findUnique({
             where: { id: Number(id) }
         });
         if (!services) {
             return res.status(404).json({ message: "service not found" });
         }
-        const updatedService = await prisma_1.prisma.services.update({
-            where: services,
-            data: { name, price, duration }
+        const updatedService = await prisma.services.update({
+            where: { id: services.id },
+            data: {
+                name,
+                price: Number(price),
+                duration: Number(duration),
+                ...(image && { image })
+            }
         });
-        return res.status(204).json({
+        return res.status(200).json({
             message: "Successfully update service",
+            data: updatedService
         });
     }
     catch (error) {
         next(error);
     }
 };
-exports.updateService = updateService;
-const deletedService = async (req, res, next) => {
+export const deletedService = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const checkService = await prisma_1.prisma.services.findUnique({
+        const checkService = await prisma.services.findUnique({
             where: { id: Number(id) }
         });
         if (!checkService) {
@@ -77,10 +103,10 @@ const deletedService = async (req, res, next) => {
                 message: "service Not Found"
             });
         }
-        const deleteService = await prisma_1.prisma.services.delete({
-            where: checkService
+        await prisma.services.delete({
+            where: { id: checkService.id }
         });
-        return res.status(204).json({
+        return res.status(200).json({
             message: "Deleted Service Success"
         });
     }
@@ -88,4 +114,3 @@ const deletedService = async (req, res, next) => {
         next(error);
     }
 };
-exports.deletedService = deletedService;

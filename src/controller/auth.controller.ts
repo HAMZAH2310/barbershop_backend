@@ -181,3 +181,24 @@ export const resendVerificationEmail = async (req: Request, res: Response, next:
         next(err)
     }
 }
+
+export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const user = (req as any).user;
+
+        if (!user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        return res.status(200).json({
+            message: "Success",
+            data: {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+            }
+        });
+    } catch (err: any) {
+        next(err)
+    }
+}
