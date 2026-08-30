@@ -14,11 +14,11 @@ const app = Router();
 
 app.use("/auth", authRoute);
 app.use("/midtrans", midtransRoute);
+app.use("/service", services);
 app.use(authentication)
 
 app.use("/customer", customerRoute);
 app.use("/barber", barberRoute);
-app.use("/service", services);
 app.use("/order", orderRoute);
 app.use("/order-item", orderItemRoute);
 app.use("/payment", paymentRoute);

@@ -59,6 +59,7 @@ model Users{
   isVerified Boolean @default(false)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
+  customer Customer?
 
   @@map("users")
 }
@@ -69,9 +70,11 @@ model Customer {
   email          String @unique
   phone          Int
   profilePicture String?
+  userId Int? @unique
   created_at     DateTime @default(now())
   updated_at     DateTime @default(now())
   orders Order[]
+  user Users? @relation(fields: [userId], references: [id]) 
 
   @@map("customers")
 }

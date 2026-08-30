@@ -1,12 +1,33 @@
 import { Request, Response, NextFunction } from "express"
 import { prisma } from '../../lib/prisma'
+import { io } from "../index";
 
 export const createOrder = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { customerId, barberId, notes } = req.body;
+        const userId = (req as any).user.id;
+        const { barberId, notes } = req.body;
 
-        if (!customerId || !barberId) {
-            return res.status(400).json({ message: "customerId dan barberId wajib diisi!" })
+        if (!barberId) {
+            return res.status(400).json({ message: "barberId wajib diisi!" })
+        }
+
+        let customer = await prisma.customer.findUnique({
+            where: { userId }
+        });
+
+        if (!customer) {
+            const user = await prisma.users.findUnique({ where: { id: userId } });
+            if (!user) {
+                return res.status(401).json({ message: "User tidak ditemukan" });
+            }
+            customer = await prisma.customer.create({
+                data: {
+                    userId: user.id,
+                    name: user.username,
+                    email: user.email,
+                    phone: 0,
+                }
+            });
         }
 
         const barber = await prisma.barber.findUnique({ where: { id: Number(barberId) } });
@@ -21,10 +42,17 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             });
         }
 
-        const customer = await prisma.customer.findUnique({ where: { id: Number(customerId) } });
+        const existingActiveOrder = await prisma.order.findFirst({
+            where: {
+                customerId: customer.id,
+                service_status: { in: ["waiting", "in_service"] }
+            }
+        })
 
-        if (!customer) {
-            return res.status(404).json({ message: "Customer tidak ditemukan" });
+        if (existingActiveOrder) {
+            return res.status(400).json({
+                message: "Kamu masih punya booking aktif yang belum selesai"
+            });
         }
 
         let queueNumber: number | null = null;
@@ -33,10 +61,12 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         if (barber.status === "available") {
             initialServiceStatus = "in_service";
 
-            await prisma.barber.update({
+            const updatedBarber = await prisma.barber.update({
                 where: { id: barber.id },
                 data: { status: "working" }
             });
+
+            io.emit("barber:statusUpdated", updatedBarber);
 
         } else if (barber.status === "working") {
             const lastQueue = await prisma.order.findFirst({
@@ -68,8 +98,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             data: newOrder
         })
 
-    } catch (error) {
-        next(error)
+    } catch (err: any) {
+        next(err)
     }
 }
 
@@ -78,15 +108,17 @@ export const getAllOrders = async (req: Request, res: Response, next: NextFuncti
         const allOrders = await prisma.order.findMany({
             include: {
                 customer: { select: { name: true } },
-                barber: { select: { name: true } }
+                barber: { select: { name: true } },
+                orderItems: { include: { service: { select: { name: true } } } },
+                midtransTransaction: {
+                    orderBy: { createdAt: "desc" },
+                    take: 1,
+                    select: { midtransOrderId: true }
+                }
             }
         });
 
-        return res.status(200).json({
-            message: "Success",
-            data: allOrders
-        })
-
+        return res.status(200).json({ message: "Success", data: allOrders })
     } catch (error) {
         next(error)
     }
@@ -94,29 +126,29 @@ export const getAllOrders = async (req: Request, res: Response, next: NextFuncti
 
 export const getOrder = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { id } = req.params;
+        const userId = (req as any).user.id;
 
-        const getOrderDetail = await prisma.order.findUnique({
-            where: { id: Number(id) },
-            include: {
-                customer: { select: { name: true } },
-                barber: { select: { name: true } }
-            }
-        })
+        const customer = await prisma.customer.findUnique({ where: { userId } });
 
-        if (!getOrderDetail) {
-            return res.status(404).json({ message: "Order not found" })
+        if (!customer) {
+            return res.status(200).json({ message: "Success", data: [] });
         }
 
-        return res.status(200).json({
-            message: "Success get order detail",
-            data: getOrderDetail
-        })
+        const orders = await prisma.order.findMany({
+            where: { customerId: customer.id },
+            include: {
+                barber: { select: { name: true } },
+                orderItems: { include: { service: { select: { name: true } } } },
+            },
+            orderBy: { checkin_time: "desc" },
+        });
+
+        return res.status(200).json({ message: "Success", data: orders });
 
     } catch (error) {
-        next(error)
+        next(error);
     }
-}
+};
 
 export const getQueuePosition = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -187,6 +219,8 @@ export const updateStatusOrder = async (req: Request, res: Response, next: NextF
             data: { service_status: status },
         })
 
+        io.emit("order:statusUpdated", updated)
+
         if (status === "completed") {
             const nextInQueue = await prisma.order.findFirst({
                 where: {
@@ -213,6 +247,8 @@ export const updateStatusOrder = async (req: Request, res: Response, next: NextF
                     data: { status: "available" }
                 });
 
+
+
                 return res.status(200).json({
                     message: "Order selesai. Tidak ada antrian, barber kembali tersedia",
                     data: updated
@@ -229,3 +265,4 @@ export const updateStatusOrder = async (req: Request, res: Response, next: NextF
         next(error)
     }
 }
+

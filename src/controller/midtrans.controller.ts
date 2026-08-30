@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma";
 import { coreApi, snap } from "../lib/midtrans";
 import { calculateMonthlyRevenue } from "../lib/revenue";
 import { io } from "../index";
+import { syncTransactionStatus } from "../lib/midtransSync";
 
 export const createTransaction = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -16,8 +17,11 @@ export const createTransaction = async (req: Request, res: Response, next: NextF
             where: { id: Number(orderId) },
             include: {
                 customer: true,
-                orderItems: {
-                    include: { service: true },
+                orderItems: { include: { service: true } },
+                midtransTransaction: {
+                    where: { transactionStatus: "pending" },
+                    orderBy: { createdAt: "desc" },
+                    take: 1,
                 }
             }
         });
@@ -26,12 +30,23 @@ export const createTransaction = async (req: Request, res: Response, next: NextF
             return res.status(404).json({ message: "Order tidak ditemukan" });
         }
 
+        const existingPending = order.midtransTransaction[0];
+        if (existingPending?.snapToken) {
+            return res.status(200).json({
+                message: "Melanjutkan transaksi yang belum selesai",
+                data: {
+                    snapToken: existingPending.snapToken,
+                    redirectUrl: existingPending.redirectUrl,
+                    midtransOrderId: existingPending.midtransOrderId,
+                }
+            });
+        }
+
         if (order.orderItems.length === 0) {
             return res.status(400).json({ message: "Order belum punya item, tidak bisa dibuat transaksi" });
         }
 
         const grossAmount = order.orderItems.reduce((sum, item) => sum + item.subtotal, 0);
-
         const midtransOrderId = `ORDER-${order.id}-${Date.now()}`;
 
         const itemDetails = order.orderItems.map((item) => ({
@@ -42,10 +57,7 @@ export const createTransaction = async (req: Request, res: Response, next: NextF
         }));
 
         const parameter = {
-            transaction_details: {
-                order_id: midtransOrderId,
-                gross_amount: grossAmount,
-            },
+            transaction_details: { order_id: midtransOrderId, gross_amount: grossAmount },
             item_details: itemDetails,
             customer_details: {
                 first_name: order.customer.name,
@@ -56,7 +68,7 @@ export const createTransaction = async (req: Request, res: Response, next: NextF
 
         const transaction = await snap.createTransaction(parameter);
 
-        const savedTransaction = await prisma.midtransTransaction.create({
+        await prisma.midtransTransaction.create({
             data: {
                 orderId: order.id,
                 midtransOrderId,
@@ -68,111 +80,42 @@ export const createTransaction = async (req: Request, res: Response, next: NextF
         });
 
         await prisma.order.update({
-            where: { id: Number(orderId) },
-            data: { payement_status: "pending" },
+            where: { id: order.id },
+            data: { payement_status: "pending" }
         });
 
         return res.status(201).json({
-            message: "Transaksi berhasil dibuat !",
+            message: "Transaksi berhasil dibuat",
             data: {
                 snapToken: transaction.token,
                 redirectUrl: transaction.redirect_url,
                 midtransOrderId,
             }
         });
-    } catch (err: any) {
-        next(err);
+
+    } catch (error) {
+        next(error);
     }
-}
+};
 
 export const handleNotification = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const notification = req.body;
-
         const statusResponse = await coreApi.transaction.notification(notification);
 
-        const {
-            order_id,
-            transaction_status,
-            fraud_status,
-            payment_type,
-            transaction_id,
-            transaction_time,
-            va_numbers,
-        } = statusResponse;
+        const result = await syncTransactionStatus(statusResponse);
 
-        const midtransTransaction = await prisma.midtransTransaction.findUnique({
-            where: { midtransOrderId: order_id },
-        });
-
-        if (!midtransTransaction) {
-            console.warn(`Notifikasi diterima untuk order_id yang tidak dikenal: ${order_id}`);
+        if (!result.found) {
+            console.warn(`Notifikasi diterima untuk order_id yang tidak dikenal: ${statusResponse.order_id}`);
             return res.status(404).json({ message: "Transaksi tidak ditemukan" });
         }
 
-        let newPaymentStatus: "unpaid" | "pending" | "paid" | "failed" | "expired" | "cancelled" = "pending";
+        return res.status(200).json({ message: "Notifikasi berhasil diproses" });
 
-        if (transaction_status === "capture") {
-            newPaymentStatus = fraud_status === "accept" ? "paid" : "pending";
-        } else if (transaction_status === "settlement") {
-            newPaymentStatus = "paid";
-        } else if (transaction_status === "deny") {
-            newPaymentStatus = "failed";
-        } else if (transaction_status === "cancel") {
-            newPaymentStatus = "cancelled";
-        } else if (transaction_status === "expire") {
-            newPaymentStatus = "expired";
-        } else if (transaction_status === "pending") {
-            newPaymentStatus = "pending";
-        }
-
-        await prisma.midtransTransaction.update({
-            where: { id: midtransTransaction.id },
-            data: {
-                transactionId: transaction_id,
-                transactionStatus: transaction_status,
-                fraudStatus: fraud_status,
-                paymentType: payment_type,
-                vaNumber: va_numbers?.[0]?.va_number,
-                bank: va_numbers?.[0]?.bank,
-                transactionTime: transaction_time ? new Date(transaction_time) : undefined,
-                rawResponse: statusResponse,
-            }
-        })
-
-        await prisma.order.update({
-            where: { id: midtransTransaction.orderId },
-            data: { payement_status: newPaymentStatus },
-        });
-
-        if (newPaymentStatus === "paid") {
-            const existingInvoice = await prisma.invoice.findUnique({
-                where: { orderId: midtransTransaction.orderId }
-            });
-
-            if (existingInvoice) {
-                await prisma.invoice.create({
-                    data: {
-                        orderId: midtransTransaction.orderId,
-                        invoiceNo: `INV-${midtransTransaction.orderId}-${Date.now()}`,
-                        totalAmount: midtransTransaction.grossAmount,
-                        paidAt: new Date(),
-                        status: "paid",
-                    }
-                });
-            }
-
-            const revenue = await calculateMonthlyRevenue();
-            io.emit("revenue:updated", revenue);
-        }
-
-        return res.status(200).json({
-            message: "Notifikasi berhasil diproses"
-        })
-    } catch (err: any) {
-
+    } catch (error) {
+        next(error);
     }
-}
+};
 
 export const getMonthlyRevenu = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -182,3 +125,24 @@ export const getMonthlyRevenu = async (req: Request, res: Response, next: NextFu
         next(err)
     }
 }
+
+export const checkTransactionStatus = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const midtransOrderId = req.params.midtransOrderId as string;
+
+        const statusResponse = await coreApi.transaction.status(midtransOrderId);
+        const result = await syncTransactionStatus(statusResponse);
+
+        if (!result.found) {
+            return res.status(404).json({ message: "Transaksi tidak ditemukan di database" });
+        }
+
+        return res.status(200).json({
+            message: "Status berhasil disinkronkan",
+            data: { status: result.status }
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
