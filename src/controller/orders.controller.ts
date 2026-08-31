@@ -266,3 +266,78 @@ export const updateStatusOrder = async (req: Request, res: Response, next: NextF
     }
 }
 
+export const cancelOrder = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+
+        const order = await prisma.order.findUnique({ where: { id: Number(id) } });
+
+        if (!order) {
+            return res.status(404).json({ message: "Order tidak ditemukan" });
+        }
+
+        if (order.service_status === "completed" || order.service_status === "cancelled") {
+            return res.status(400).json({
+                message: `Order dengan status "${order.service_status}" tidak bisa dibatalkan`
+            });
+        }
+
+        const wasInService = order.service_status === "in_service";
+
+        const cancelled = await prisma.order.update({
+            where: { id: order.id },
+            data: {
+                service_status: "cancelled",
+                queueNumber: null, // hapus posisi antrian, sudah tidak relevan
+            }
+        });
+
+        io.emit("order:statusUpdated", cancelled);
+
+        // kalau order ini sedang dilayani, urus antrian berikutnya sama seperti alur selesai normal
+        if (wasInService) {
+            const nextInQueue = await prisma.order.findFirst({
+                where: {
+                    barberId: order.barberId,
+                    service_status: "waiting",
+                    queueNumber: { not: null }
+                },
+                orderBy: { queueNumber: "asc" }
+            });
+
+            if (nextInQueue) {
+                const promoted = await prisma.order.update({
+                    where: { id: nextInQueue.id },
+                    data: { service_status: "in_service" }
+                });
+
+                io.emit("order:statusUpdated", promoted);
+
+                return res.status(200).json({
+                    message: `Order dibatalkan. Order #${nextInQueue.id} (antrian ${nextInQueue.queueNumber}) sekarang dilayani`,
+                    data: cancelled
+                });
+            } else {
+                const freedBarber = await prisma.barber.update({
+                    where: { id: order.barberId },
+                    data: { status: "available" }
+                });
+
+                io.emit("barber:statusUpdated", freedBarber);
+
+                return res.status(200).json({
+                    message: "Order dibatalkan. Barber kembali tersedia",
+                    data: cancelled
+                });
+            }
+        }
+
+        return res.status(200).json({
+            message: "Order berhasil dibatalkan",
+            data: cancelled
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};

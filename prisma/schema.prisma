@@ -22,6 +22,7 @@ enum service_status {
   waiting
   in_service
   completed
+  cancelled
 }
 
 enum payment_status {
@@ -139,6 +140,7 @@ model Services {
   duration Int
   price Int
   image String?
+  isActive Boolean @default(true)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
   orderItems OrderItems[]
