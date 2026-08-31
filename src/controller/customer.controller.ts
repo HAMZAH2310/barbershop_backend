@@ -5,9 +5,25 @@ import { uploadToCloudinary } from "../../lib/uploadtoCloudinary";
 
 export const registerCustomer = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { name, phone } = req.body;
+        const { phone, userId } = req.body;
 
-        let profilePicture: string | undefined
+        if (!phone || !userId) {
+            return res.status(400).json({
+                message: "Field userId dan phone harus diisi"
+            });
+        }
+
+        const user = await prisma.users.findUnique({
+            where: { id: Number(userId) }
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User tidak ditemukan"
+            });
+        }
+
+        let profilePicture: string | undefined;
 
         if (req.file) {
             const pictureBuffer = req.file.buffer;
@@ -15,38 +31,31 @@ export const registerCustomer = async (req: Request, res: Response, next: NextFu
             profilePicture = result.secure_url;
         }
 
-        if (!name || !phone) {
-            return res.status(400).json({
-                message: "Field name dan phone harus diisi"
-            })
-        };
-
         const newCustomer = await prisma.customer.create({
             data: {
-                name: name,
+                name: user.username,
                 phone: Number(phone),
+                email: user.email,
                 ...(profilePicture && { profilePicture }),
             }
-        })
+        });
 
         return res.status(201).json({
-            message: "SUccesfully create customer",
+            message: "Successfully create customer",
             data: {
                 id: newCustomer.id,
                 name: newCustomer.name,
                 phone: newCustomer.phone,
+                profilePicture: newCustomer.profilePicture
             }
         });
     } catch (error) {
-        next(error)
+        next(error);
     }
-}
+};
 
 export const getAllCustomer = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // const page = parseInt(req.query.page as string) || 1;
-        // const limit = parseInt(req.query.limit as string) || 5; 
-
         const allCustomer = await prisma.customer.findMany()
 
         return res.status(200).json({
@@ -106,7 +115,7 @@ export const updateCustomer = async (req: Request, res: Response, next: NextFunc
         }
 
         const updatedCustomer = await prisma.customer.update({
-            where: {id: Number(id)},
+            where: { id: Number(id) },
             data: {
                 name: name,
                 phone: phone ? Number(phone) : undefined,
@@ -138,7 +147,7 @@ export const deleteCustomer = async (req: Request, res: Response, next: NextFunc
         }
 
         const deletedCustomer = await prisma.customer.delete({
-            where: checkCustomer
+            where: { id: Number(id) },
         })
 
         return res.status(204).json({

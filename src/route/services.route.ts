@@ -1,11 +1,14 @@
 import { Router } from "express";
 import { CreateServices, getAllServices, updateService, deletedService } from "../controller/service.controller";
+import upload from "../middleware/upload.middleware";
+import { isAdmin } from "../middleware/authorization.middleware";
+import { authentication } from "../middleware/auth.middleware";
 
 const route = Router();
 
 route.get("/", getAllServices);
-route.post("/", CreateServices);
-route.patch("/:id", updateService);
-route.delete("/:id", deletedService);
+route.post("/", authentication, isAdmin, upload.single("image"), CreateServices);
+route.patch("/:id", authentication, isAdmin, upload.single("image"), updateService);
+route.delete("/:id", authentication, isAdmin, deletedService);
 
 export default route;

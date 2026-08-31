@@ -1,14 +1,11 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllBarber = exports.registerBarber = void 0;
-const prisma_1 = require("../../lib/prisma");
-const uploadtoCloudinary_1 = require("../../lib/uploadtoCloudinary");
-const registerBarber = async (req, res, next) => {
+import { prisma } from "../../lib/prisma";
+import { uploadToCloudinary } from "../../lib/uploadtoCloudinary";
+export const registerBarber = async (req, res, next) => {
     try {
         const { name, phone } = req.body;
         let picture;
         if (req.file) {
-            const result = await (0, uploadtoCloudinary_1.uploadToCloudinary)(req.file.buffer, "barber");
+            const result = await uploadToCloudinary(req.file.buffer, "barber");
             picture = result.secure_url;
         }
         if (!name || !phone) {
@@ -17,7 +14,7 @@ const registerBarber = async (req, res, next) => {
             });
         }
         ;
-        const newBarber = await prisma_1.prisma.barber.create({
+        const newBarber = await prisma.barber.create({
             data: {
                 name,
                 phone: Number(phone),
@@ -37,10 +34,9 @@ const registerBarber = async (req, res, next) => {
         next(error);
     }
 };
-exports.registerBarber = registerBarber;
-const getAllBarber = async (req, res, next) => {
+export const getAllBarber = async (req, res, next) => {
     try {
-        const allBarber = await prisma_1.prisma.barber.findMany();
+        const allBarber = await prisma.barber.findMany();
         return res.status(200).json({
             data: allBarber
         });
@@ -49,4 +45,84 @@ const getAllBarber = async (req, res, next) => {
         next(error);
     }
 };
-exports.getAllBarber = getAllBarber;
+export const updateStatusBarber = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        const validStatus = ['available', 'working', 'on_break'];
+        if (!status || !validStatus.includes(status)) {
+            return res.status(400).json({
+                message: "Status harus salah satu dari: available, working, on_break"
+            });
+        }
+        const barber = await prisma.barber.findUnique({
+            where: { id: Number(id) },
+        });
+        if (!barber) {
+            return res.status(404).json({ message: "Barber tidak ditemukan" });
+        }
+        const updatedBarber = await prisma.barber.update({
+            where: { id: barber.id },
+            data: { status },
+        });
+        return res.status(200).json({
+            message: "Status barber berhasil diupdate",
+            data: updatedBarber
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+};
+export const updateBarber = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { name, phone } = req.body;
+        const barber = await prisma.barber.findUnique({
+            where: { id: Number(id) }
+        });
+        if (!barber) {
+            return res.status(404).json({ message: "Barber tidak ditemukan" });
+        }
+        let picture;
+        if (req.file) {
+            const result = await uploadToCloudinary(req.file.buffer, "barber");
+            picture = result.secure_url;
+        }
+        const updatedBarber = await prisma.barber.update({
+            where: { id: Number(id) },
+            data: {
+                ...(name && { name }),
+                ...(phone && { phone: Number(phone) }),
+                ...(picture && { picture }),
+            }
+        });
+        return res.status(200).json({
+            message: "Success Update Barber",
+            data: updatedBarber
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+export const deleteBarber = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const barber = await prisma.barber.findUnique({
+            where: { id: Number(id) }
+        });
+        if (!barber) {
+            return res.status(404).json({ message: "Barber tidak ditemukan" });
+        }
+        await prisma.barber.delete({
+            where: { id: Number(id) }
+        });
+        return res.status(200).json({
+            message: "Barber berhasil dihapus"
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};

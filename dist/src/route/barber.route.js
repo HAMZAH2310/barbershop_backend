@@ -1,12 +1,12 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const barber_controller_1 = require("../controller/barber.controller");
-const upload_middleware_1 = __importDefault(require("../middleware/upload.middleware"));
-const route = (0, express_1.Router)();
-route.post("/register", upload_middleware_1.default.single("picture"), barber_controller_1.registerBarber);
-route.get("/", barber_controller_1.getAllBarber);
-exports.default = route;
+import { Router } from "express";
+import { registerBarber, getAllBarber, updateStatusBarber, updateBarber, deleteBarber } from "../controller/barber.controller";
+import upload from "../middleware/upload.middleware";
+import { authentication } from "../middleware/auth.middleware";
+import { isAdmin } from "../middleware/authorization.middleware";
+const route = Router();
+route.post("/", authentication, isAdmin, upload.single("picture"), registerBarber);
+route.get("/", getAllBarber);
+route.patch("/:id/status", authentication, isAdmin, updateStatusBarber);
+route.patch("/:id", authentication, isAdmin, upload.single("picture"), updateBarber);
+route.delete("/:id", authentication, isAdmin, deleteBarber);
+export default route;

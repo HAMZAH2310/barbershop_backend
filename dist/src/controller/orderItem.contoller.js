@@ -1,12 +1,9 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteOrderItem = exports.updateItemOrder = exports.getOrderItems = exports.createItemOrder = exports.getAllOrderItems = void 0;
-const prisma_1 = require("../../lib/prisma");
-const getAllOrderItems = async (req, res, next) => {
+import { prisma } from "../../lib/prisma";
+export const getAllOrderItems = async (req, res, next) => {
     try {
         const { orderId } = req.query;
         const where = orderId ? { orderId: Number(orderId) } : {};
-        const items = await prisma_1.prisma.orderItems.findMany({
+        const items = await prisma.orderItems.findMany({
             where,
             include: { service: true }
         });
@@ -19,21 +16,37 @@ const getAllOrderItems = async (req, res, next) => {
         next(err);
     }
 };
-exports.getAllOrderItems = getAllOrderItems;
-const createItemOrder = async (req, res, next) => {
+export const createItemOrder = async (req, res, next) => {
     try {
-        const { orderId, serviceId, duration, price, qty, subtotal } = req.body;
-        if (!orderId || !serviceId || !duration || !price || !qty) {
-            return res.status(400).json({ message: "Semua Field harus diisi" });
+        const { orderId, serviceId, qty } = req.body;
+        if (!orderId || !serviceId || !qty) {
+            return res.status(400).json({ message: "orderId, serviceId, dan qty harus diisi" });
         }
-        const newItemOrder = await prisma_1.prisma.orderItems.create({
+        const qtyNum = Number(qty);
+        if (isNaN(qtyNum) || qtyNum <= 0) {
+            return res.status(400).json({ message: "qty harus berupa angka lebih dari 0" });
+        }
+        const service = await prisma.services.findUnique({
+            where: { id: Number(serviceId) },
+        });
+        if (!service) {
+            return res.status(404).json({ message: "Service tidak ditemukan" });
+        }
+        const order = await prisma.order.findUnique({
+            where: { id: Number(orderId) }
+        });
+        if (!order) {
+            return res.status(404).json({ message: "Order tidak ditemukan" });
+        }
+        const subtotal = service.price * qtyNum;
+        const newItemOrder = await prisma.orderItems.create({
             data: {
                 orderId,
                 serviceId,
-                duration,
-                price,
+                duration: service.duration,
+                price: service.price,
                 qty,
-                subtotal: price * qty,
+                subtotal,
             }
         });
         return res.status(201).json({
@@ -45,12 +58,11 @@ const createItemOrder = async (req, res, next) => {
         next(error);
     }
 };
-exports.createItemOrder = createItemOrder;
-const getOrderItems = async (req, res, next) => {
+export const getOrderItems = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { orderId } = req.body;
-        const item = await prisma_1.prisma.orderItems.findUnique({
+        const item = await prisma.orderItems.findUnique({
             where: { id: Number(id) },
             include: { service: true },
         });
@@ -68,18 +80,17 @@ const getOrderItems = async (req, res, next) => {
         next(error);
     }
 };
-exports.getOrderItems = getOrderItems;
-const updateItemOrder = async (req, res, next) => {
+export const updateItemOrder = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { duration, price, qty, subtotal } = req.body;
-        const orderItem = await prisma_1.prisma.orderItems.findUnique({
+        const orderItem = await prisma.orderItems.findUnique({
             where: { id: Number(id) }
         });
         if (!orderItem) {
             return res.status(404).json({ message: "Order tidak ditemukan!" });
         }
-        const updateOrderItem = await prisma_1.prisma.orderItems.update({
+        const updateOrderItem = await prisma.orderItems.update({
             where: orderItem,
             data: {
                 duration,
@@ -94,11 +105,10 @@ const updateItemOrder = async (req, res, next) => {
         next(error);
     }
 };
-exports.updateItemOrder = updateItemOrder;
-const deleteOrderItem = async (req, res, next) => {
+export const deleteOrderItem = async (req, res, next) => {
     const { id } = req.params;
     try {
-        const deletedOrderItem = await prisma_1.prisma.orderItems.delete({
+        const deletedOrderItem = await prisma.orderItems.delete({
             where: { id: Number(id) }
         });
         return res.status(204);
@@ -107,4 +117,3 @@ const deleteOrderItem = async (req, res, next) => {
         next(error);
     }
 };
-exports.deleteOrderItem = deleteOrderItem;

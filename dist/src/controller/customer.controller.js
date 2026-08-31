@@ -1,37 +1,42 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteCustomer = exports.updateCustomer = exports.getCustomerDetails = exports.getAllCustomer = exports.registerCustomer = void 0;
-const prisma_1 = require("../../lib/prisma");
-const uploadtoCloudinary_1 = require("../../lib/uploadtoCloudinary");
-require("multer");
-const registerCustomer = async (req, res, next) => {
+import { prisma } from "../../lib/prisma";
+import { uploadToCloudinary } from "../../lib/uploadtoCloudinary";
+export const registerCustomer = async (req, res, next) => {
     try {
-        const { name, phone } = req.body;
+        const { phone, userId } = req.body;
+        if (!phone || !userId) {
+            return res.status(400).json({
+                message: "Field userId dan phone harus diisi"
+            });
+        }
+        const user = await prisma.users.findUnique({
+            where: { id: Number(userId) }
+        });
+        if (!user) {
+            return res.status(404).json({
+                message: "User tidak ditemukan"
+            });
+        }
         let profilePicture;
         if (req.file) {
             const pictureBuffer = req.file.buffer;
-            const result = await (0, uploadtoCloudinary_1.uploadToCloudinary)(pictureBuffer);
+            const result = await uploadToCloudinary(pictureBuffer);
             profilePicture = result.secure_url;
         }
-        if (!name || !phone) {
-            return res.status(400).json({
-                message: "Field name dan phone harus diisi"
-            });
-        }
-        ;
-        const newCustomer = await prisma_1.prisma.customer.create({
+        const newCustomer = await prisma.customer.create({
             data: {
-                name: name,
+                name: user.username,
                 phone: Number(phone),
+                email: user.email,
                 ...(profilePicture && { profilePicture }),
             }
         });
         return res.status(201).json({
-            message: "SUccesfully create customer",
+            message: "Successfully create customer",
             data: {
                 id: newCustomer.id,
                 name: newCustomer.name,
                 phone: newCustomer.phone,
+                profilePicture: newCustomer.profilePicture
             }
         });
     }
@@ -39,12 +44,11 @@ const registerCustomer = async (req, res, next) => {
         next(error);
     }
 };
-exports.registerCustomer = registerCustomer;
-const getAllCustomer = async (req, res, next) => {
+export const getAllCustomer = async (req, res, next) => {
     try {
         // const page = parseInt(req.query.page as string) || 1;
         // const limit = parseInt(req.query.limit as string) || 5; 
-        const allCustomer = await prisma_1.prisma.customer.findMany();
+        const allCustomer = await prisma.customer.findMany();
         return res.status(200).json({
             message: "Success get all customer",
             data: allCustomer
@@ -54,11 +58,10 @@ const getAllCustomer = async (req, res, next) => {
         next(error);
     }
 };
-exports.getAllCustomer = getAllCustomer;
-const getCustomerDetails = async (req, res, next) => {
+export const getCustomerDetails = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const customer = await prisma_1.prisma.customer.findUnique({
+        const customer = await prisma.customer.findUnique({
             where: { id: Number(id) }
         });
         if (!customer) {
@@ -75,18 +78,17 @@ const getCustomerDetails = async (req, res, next) => {
         next(error);
     }
 };
-exports.getCustomerDetails = getCustomerDetails;
-const updateCustomer = async (req, res, next) => {
+export const updateCustomer = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { name, phone } = req.body;
         let profilePicture;
         if (req.file) {
             const pictureBuffer = req.file.buffer;
-            const result = await (0, uploadtoCloudinary_1.uploadToCloudinary)(pictureBuffer);
+            const result = await uploadToCloudinary(pictureBuffer);
             profilePicture = result.secure_url;
         }
-        const checkCustomer = await prisma_1.prisma.customer.findUnique({
+        const checkCustomer = await prisma.customer.findUnique({
             where: { id: Number(id) }
         });
         if (!checkCustomer) {
@@ -94,11 +96,11 @@ const updateCustomer = async (req, res, next) => {
                 message: "Customer not found"
             });
         }
-        const updatedCustomer = await prisma_1.prisma.customer.update({
-            where: checkCustomer,
+        const updatedCustomer = await prisma.customer.update({
+            where: { id: Number(id) },
             data: {
-                name,
-                phone,
+                name: name,
+                phone: phone ? Number(phone) : undefined,
                 ...(profilePicture && { profilePicture }),
             }
         });
@@ -110,11 +112,10 @@ const updateCustomer = async (req, res, next) => {
         next(error);
     }
 };
-exports.updateCustomer = updateCustomer;
-const deleteCustomer = async (req, res, next) => {
+export const deleteCustomer = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const checkCustomer = await prisma_1.prisma.customer.findUnique({
+        const checkCustomer = await prisma.customer.findUnique({
             where: { id: Number(id) }
         });
         if (!checkCustomer) {
@@ -122,8 +123,8 @@ const deleteCustomer = async (req, res, next) => {
                 message: "User Not Found"
             });
         }
-        const deletedCustomer = await prisma_1.prisma.customer.delete({
-            where: checkCustomer
+        const deletedCustomer = await prisma.customer.delete({
+            where: { id: Number(id) },
         });
         return res.status(204).json({
             message: "Delete data successfully"
@@ -133,4 +134,3 @@ const deleteCustomer = async (req, res, next) => {
         next(error);
     }
 };
-exports.deleteCustomer = deleteCustomer;

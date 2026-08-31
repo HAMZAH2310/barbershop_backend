@@ -1,25 +1,56 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateStatusOrder = exports.getOrder = exports.getAllOrders = exports.createOrder = void 0;
-const prisma_1 = require("../../lib/prisma");
-const createOrder = async (req, res, next) => {
+import { prisma } from '../../lib/prisma';
+export const createOrder = async (req, res, next) => {
     try {
-        const { customerId, barberId, serviceStatus, paymentStatus, checkinTime, notes } = req.body;
+        const { customerId, barberId, notes } = req.body;
         if (!customerId || !barberId) {
-            return res.status(400).json({ mesage: "Semua wajib di isi!" });
+            return res.status(400).json({ message: "customerId dan barberId wajib diisi!" });
         }
-        const newOrder = await prisma_1.prisma.order.create({
+        const barber = await prisma.barber.findUnique({ where: { id: Number(barberId) } });
+        if (!barber) {
+            return res.status(404).json({ message: "Barber tidak ditemukan" });
+        }
+        if (barber.status === "on_break") {
+            return res.status(400).json({
+                message: "Barber sedang istirahat, silakan pilih barber lain atau tunggu"
+            });
+        }
+        const customer = await prisma.customer.findUnique({ where: { id: Number(customerId) } });
+        if (!customer) {
+            return res.status(404).json({ message: "Customer tidak ditemukan" });
+        }
+        let queueNumber = null;
+        let initialServiceStatus = "waiting";
+        if (barber.status === "available") {
+            initialServiceStatus = "in_service";
+            await prisma.barber.update({
+                where: { id: barber.id },
+                data: { status: "working" }
+            });
+        }
+        else if (barber.status === "working") {
+            const lastQueue = await prisma.order.findFirst({
+                where: {
+                    barberId: barber.id,
+                    service_status: "waiting",
+                    queueNumber: { not: null }
+                },
+                orderBy: { queueNumber: "desc" }
+            });
+            queueNumber = lastQueue?.queueNumber ? lastQueue.queueNumber + 1 : 1;
+        }
+        const newOrder = await prisma.order.create({
             data: {
-                customerId,
-                barberId,
-                service_status: serviceStatus,
-                payement_status: paymentStatus,
-                checkin_time: checkinTime,
-                notes
+                customerId: customer.id,
+                barberId: barber.id,
+                notes: notes || "",
+                service_status: initialServiceStatus,
+                queueNumber,
             }
         });
         return res.status(201).json({
-            message: "Success create new order",
+            message: queueNumber
+                ? `Order berhasil dibuat. Nomor antrian kamu: ${queueNumber}`
+                : "Order berhasil dibuat, barber siap melayani sekarang",
             data: newOrder
         });
     }
@@ -27,10 +58,9 @@ const createOrder = async (req, res, next) => {
         next(error);
     }
 };
-exports.createOrder = createOrder;
-const getAllOrders = async (req, res, next) => {
+export const getAllOrders = async (req, res, next) => {
     try {
-        const allOrders = await prisma_1.prisma.order.findMany({
+        const allOrders = await prisma.order.findMany({
             include: {
                 customer: { select: { name: true } },
                 barber: { select: { name: true } }
@@ -45,11 +75,10 @@ const getAllOrders = async (req, res, next) => {
         next(error);
     }
 };
-exports.getAllOrders = getAllOrders;
-const getOrder = async (req, res, next) => {
+export const getOrder = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const getOrderDetail = await prisma_1.prisma.order.findUnique({
+        const getOrderDetail = await prisma.order.findUnique({
             where: { id: Number(id) },
             include: {
                 customer: { select: { name: true } },
@@ -68,17 +97,48 @@ const getOrder = async (req, res, next) => {
         next(error);
     }
 };
-exports.getOrder = getOrder;
+export const getQueuePosition = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const order = await prisma.order.findUnique({ where: { id: Number(id) } });
+        if (!order) {
+            return res.status(404).json({ message: "Order not found" });
+        }
+        if (order.service_status === "in_service") {
+            return res.status(200).json({ message: "Sedang dilayani sekarang" });
+        }
+        if (order.service_status === "completed") {
+            return res.status(200).json({ message: "Order sudah selesai" });
+        }
+        if (!order.queueNumber) {
+            return res.status(200).json({ message: "Order sedang diproses" });
+        }
+        const peopleAhead = await prisma.order.count({
+            where: {
+                barberId: order.barberId,
+                service_status: "waiting",
+                queueNumber: { lt: order.queueNumber }
+            }
+        });
+        return res.status(200).json({
+            message: `Nomor antrian kamu: ${order.queueNumber}`,
+            data: { queueNumber: order.queueNumber, peopleAhead }
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
 const status_order = {
     waiting: ["in_service"],
     in_service: ["completed"],
     completed: [],
 };
-const updateStatusOrder = async (req, res, next) => {
+export const updateStatusOrder = async (req, res, next) => {
     const { id } = req.params;
     const { status } = req.body;
     try {
-        const getOrder = await prisma_1.prisma.order.findUnique({
+        const getOrder = await prisma.order.findUnique({
             where: { id: Number(id) }
         });
         if (!getOrder) {
@@ -88,16 +148,46 @@ const updateStatusOrder = async (req, res, next) => {
         if (!allowed.includes(status)) {
             return res.status(400).json({ message: "Status tidak sesuai" });
         }
-        const updated = await prisma_1.prisma.order.update({
+        const updated = await prisma.order.update({
             where: { id: Number(id) },
             data: { service_status: status },
         });
-        return res.status(204).json({
-            message: "Success update order status"
+        if (status === "completed") {
+            const nextInQueue = await prisma.order.findFirst({
+                where: {
+                    barberId: getOrder.barberId,
+                    service_status: "waiting",
+                    queueNumber: { not: null }
+                },
+                orderBy: { queueNumber: "asc" }
+            });
+            if (nextInQueue) {
+                await prisma.order.update({
+                    where: { id: nextInQueue.id },
+                    data: { service_status: "in_service" }
+                });
+                return res.status(200).json({
+                    message: `Order selesai. Order #${nextInQueue.id} (antrian ${nextInQueue.queueNumber}) sekarang dilayani`,
+                    data: updated
+                });
+            }
+            else {
+                await prisma.barber.update({
+                    where: { id: getOrder.barberId },
+                    data: { status: "available" }
+                });
+                return res.status(200).json({
+                    message: "Order selesai. Tidak ada antrian, barber kembali tersedia",
+                    data: updated
+                });
+            }
+        }
+        return res.status(200).json({
+            message: "Success update order status",
+            data: updated
         });
     }
     catch (error) {
         next(error);
     }
 };
-exports.updateStatusOrder = updateStatusOrder;

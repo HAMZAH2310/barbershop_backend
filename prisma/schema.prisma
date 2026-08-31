@@ -22,20 +22,45 @@ enum service_status {
   waiting
   in_service
   completed
+  cancelled
 }
 
 enum payment_status {
   unpaid
+  pending     
   paid
+  failed
+  expired
+  cancelled
+  refunded
+}
+
+enum midtrans_status {
+  pending
+  settlement
+  capture
+  deny
+  cancel
+  expire
+  refund
+}
+
+enum barber_status {
+  available
+  working
+  on_break
 }
 
 model Users{
   id Int @id @default(autoincrement())
-  username String @unique
+  username String
+  email String @unique
   password String
-  role Role @default(ADMIN)
+  role Role @default(CUSTOMER)
+  isVerified Boolean @default(false)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
+  customer Customer?
 
   @@map("users")
 }
@@ -43,11 +68,14 @@ model Users{
 model Customer {
   id             Int      @id @default(autoincrement())
   name           String
+  email          String @unique
   phone          Int
   profilePicture String?
+  userId Int? @unique
   created_at     DateTime @default(now())
   updated_at     DateTime @default(now())
   orders Order[]
+  user Users? @relation(fields: [userId], references: [id]) 
 
   @@map("customers")
 }
@@ -57,6 +85,7 @@ model Barber {
   name        String
   phone       Int
   picture     String?
+  status barber_status @default(available)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
   orders Order[]
@@ -68,15 +97,17 @@ model Order{
   id Int @id @default(autoincrement())
   customerId Int
   barberId Int
+  queueNumber Int?
   service_status service_status @default(waiting)
   payement_status payment_status @default(unpaid)
-  notes String
+  notes String?
   checkin_time DateTime @default(now())
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
   orderItems OrderItems[]
   payment Payment[]
   invoice Invoice[]
+  midtransTransaction MidtransTransaction[]
 
   customer Customer @relation(fields: [customerId], references: [id])
   barber Barber @relation(fields: [barberId], references: [id])
@@ -108,6 +139,8 @@ model Services {
   name String
   duration Int
   price Int
+  image String?
+  isActive Boolean @default(true)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now())
   orderItems OrderItems[]
@@ -142,4 +175,28 @@ model Invoice {
   order Order @relation(fields: [orderId], references: [id])
 
   @@map("invoice")
+}
+
+model MidtransTransaction {
+   id                Int              @id @default(autoincrement())
+   orderId           Int
+   midtransOrderId   String           @unique
+   transactionId     String?          @unique
+   grossAmount       Int
+   paymentType       String?
+   transactionStatus midtrans_status @default(pending)
+   fraudStatus       String?
+   vaNumber          String?
+   bank              String?
+   snapToken         String?
+   redirectUrl       String?
+   transactionTime   DateTime?
+   expiryTime        DateTime?
+   rawResponse       Json? 
+   createdAt         DateTime         @default(now())
+   updatedAt         DateTime         @updatedAt
+
+   order Order @relation(fields: [orderId], references: [id])
+
+   @@map("midtrans_transactions")
 }
