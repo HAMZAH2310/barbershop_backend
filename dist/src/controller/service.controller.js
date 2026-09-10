@@ -46,12 +46,16 @@ export const CreateServices = async (req, res, next) => {
 };
 export const getAllServices = async (req, res, next) => {
     try {
-        const allServices = await prisma.services.findMany();
-        if (allServices.length === 0) {
-            return res.status(200).json({ message: "Data belum ada!" });
+        const { includeInactive } = req.query;
+        const allService = await prisma.services.findMany({
+            where: includeInactive === "true" ? {} : { isActive: true },
+            orderBy: { created_at: "desc" },
+        });
+        if (allService.length === 0) {
+            return res.status(200).json({ message: "Data belum ada" });
         }
         return res.status(200).json({
-            data: allServices
+            data: allService
         });
     }
     catch (error) {
@@ -99,15 +103,17 @@ export const deletedService = async (req, res, next) => {
             where: { id: Number(id) }
         });
         if (!checkService) {
-            return res.status(404).json({
-                message: "service Not Found"
-            });
+            return res.status(404).json({ message: "service Not Found" });
         }
-        await prisma.services.delete({
-            where: { id: checkService.id }
+        if (!checkService.isActive) {
+            return res.status(400).json({ message: "Layanan ini sudah tidak aktif" });
+        }
+        await prisma.services.update({
+            where: { id: checkService.id },
+            data: { isActive: false }
         });
         return res.status(200).json({
-            message: "Deleted Service Success"
+            message: "Layanan berhasil dinonaktifkan"
         });
     }
     catch (error) {

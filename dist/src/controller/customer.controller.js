@@ -46,8 +46,6 @@ export const registerCustomer = async (req, res, next) => {
 };
 export const getAllCustomer = async (req, res, next) => {
     try {
-        // const page = parseInt(req.query.page as string) || 1;
-        // const limit = parseInt(req.query.limit as string) || 5; 
         const allCustomer = await prisma.customer.findMany();
         return res.status(200).json({
             message: "Success get all customer",

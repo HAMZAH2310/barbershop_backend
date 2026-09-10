@@ -1,9 +1,28 @@
 import { prisma } from '../../lib/prisma';
+import { io } from "../index";
 export const createOrder = async (req, res, next) => {
     try {
-        const { customerId, barberId, notes } = req.body;
-        if (!customerId || !barberId) {
-            return res.status(400).json({ message: "customerId dan barberId wajib diisi!" });
+        const userId = req.user.id;
+        const { barberId, notes } = req.body;
+        if (!barberId) {
+            return res.status(400).json({ message: "barberId wajib diisi!" });
+        }
+        let customer = await prisma.customer.findUnique({
+            where: { userId }
+        });
+        if (!customer) {
+            const user = await prisma.users.findUnique({ where: { id: userId } });
+            if (!user) {
+                return res.status(401).json({ message: "User tidak ditemukan" });
+            }
+            customer = await prisma.customer.create({
+                data: {
+                    userId: user.id,
+                    name: user.username,
+                    email: user.email,
+                    phone: 0,
+                }
+            });
         }
         const barber = await prisma.barber.findUnique({ where: { id: Number(barberId) } });
         if (!barber) {
@@ -14,18 +33,26 @@ export const createOrder = async (req, res, next) => {
                 message: "Barber sedang istirahat, silakan pilih barber lain atau tunggu"
             });
         }
-        const customer = await prisma.customer.findUnique({ where: { id: Number(customerId) } });
-        if (!customer) {
-            return res.status(404).json({ message: "Customer tidak ditemukan" });
+        const existingActiveOrder = await prisma.order.findFirst({
+            where: {
+                customerId: customer.id,
+                service_status: { in: ["waiting", "in_service"] }
+            }
+        });
+        if (existingActiveOrder) {
+            return res.status(400).json({
+                message: "Kamu masih punya booking aktif yang belum selesai"
+            });
         }
         let queueNumber = null;
         let initialServiceStatus = "waiting";
         if (barber.status === "available") {
             initialServiceStatus = "in_service";
-            await prisma.barber.update({
+            const updatedBarber = await prisma.barber.update({
                 where: { id: barber.id },
                 data: { status: "working" }
             });
+            io.emit("barber:statusUpdated", updatedBarber);
         }
         else if (barber.status === "working") {
             const lastQueue = await prisma.order.findFirst({
@@ -54,8 +81,8 @@ export const createOrder = async (req, res, next) => {
             data: newOrder
         });
     }
-    catch (error) {
-        next(error);
+    catch (err) {
+        next(err);
     }
 };
 export const getAllOrders = async (req, res, next) => {
@@ -63,13 +90,16 @@ export const getAllOrders = async (req, res, next) => {
         const allOrders = await prisma.order.findMany({
             include: {
                 customer: { select: { name: true } },
-                barber: { select: { name: true } }
+                barber: { select: { name: true } },
+                orderItems: { include: { service: { select: { name: true } } } },
+                midtransTransaction: {
+                    orderBy: { createdAt: "desc" },
+                    take: 1,
+                    select: { midtransOrderId: true }
+                }
             }
         });
-        return res.status(200).json({
-            message: "Success",
-            data: allOrders
-        });
+        return res.status(200).json({ message: "Success", data: allOrders });
     }
     catch (error) {
         next(error);
@@ -77,21 +107,20 @@ export const getAllOrders = async (req, res, next) => {
 };
 export const getOrder = async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const getOrderDetail = await prisma.order.findUnique({
-            where: { id: Number(id) },
-            include: {
-                customer: { select: { name: true } },
-                barber: { select: { name: true } }
-            }
-        });
-        if (!getOrderDetail) {
-            return res.status(404).json({ message: "Order not found" });
+        const userId = req.user.id;
+        const customer = await prisma.customer.findUnique({ where: { userId } });
+        if (!customer) {
+            return res.status(200).json({ message: "Success", data: [] });
         }
-        return res.status(200).json({
-            message: "Success get order detail",
-            data: getOrderDetail
+        const orders = await prisma.order.findMany({
+            where: { customerId: customer.id },
+            include: {
+                barber: { select: { name: true } },
+                orderItems: { include: { service: { select: { name: true } } } },
+            },
+            orderBy: { checkin_time: "desc" },
         });
+        return res.status(200).json({ message: "Success", data: orders });
     }
     catch (error) {
         next(error);
@@ -152,6 +181,7 @@ export const updateStatusOrder = async (req, res, next) => {
             where: { id: Number(id) },
             data: { service_status: status },
         });
+        io.emit("order:statusUpdated", updated);
         if (status === "completed") {
             const nextInQueue = await prisma.order.findFirst({
                 where: {
@@ -185,6 +215,69 @@ export const updateStatusOrder = async (req, res, next) => {
         return res.status(200).json({
             message: "Success update order status",
             data: updated
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+export const cancelOrder = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const order = await prisma.order.findUnique({ where: { id: Number(id) } });
+        if (!order) {
+            return res.status(404).json({ message: "Order tidak ditemukan" });
+        }
+        if (order.service_status === "completed" || order.service_status === "cancelled") {
+            return res.status(400).json({
+                message: `Order dengan status "${order.service_status}" tidak bisa dibatalkan`
+            });
+        }
+        const wasInService = order.service_status === "in_service";
+        const cancelled = await prisma.order.update({
+            where: { id: order.id },
+            data: {
+                service_status: "cancelled",
+                queueNumber: null, // hapus posisi antrian, sudah tidak relevan
+            }
+        });
+        io.emit("order:statusUpdated", cancelled);
+        // kalau order ini sedang dilayani, urus antrian berikutnya sama seperti alur selesai normal
+        if (wasInService) {
+            const nextInQueue = await prisma.order.findFirst({
+                where: {
+                    barberId: order.barberId,
+                    service_status: "waiting",
+                    queueNumber: { not: null }
+                },
+                orderBy: { queueNumber: "asc" }
+            });
+            if (nextInQueue) {
+                const promoted = await prisma.order.update({
+                    where: { id: nextInQueue.id },
+                    data: { service_status: "in_service" }
+                });
+                io.emit("order:statusUpdated", promoted);
+                return res.status(200).json({
+                    message: `Order dibatalkan. Order #${nextInQueue.id} (antrian ${nextInQueue.queueNumber}) sekarang dilayani`,
+                    data: cancelled
+                });
+            }
+            else {
+                const freedBarber = await prisma.barber.update({
+                    where: { id: order.barberId },
+                    data: { status: "available" }
+                });
+                io.emit("barber:statusUpdated", freedBarber);
+                return res.status(200).json({
+                    message: "Order dibatalkan. Barber kembali tersedia",
+                    data: cancelled
+                });
+            }
+        }
+        return res.status(200).json({
+            message: "Order berhasil dibatalkan",
+            data: cancelled
         });
     }
     catch (error) {

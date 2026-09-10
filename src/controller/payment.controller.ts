@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
-
-import generateInvoice from "../utils/generateInvoice"
+import { io } from "../index";
+import { calculateMonthlyRevenue } from "../lib/revenue";
+import generateInvoice from "../utils/generateInvoice";
 
 export const getPayment = async (req: Request, res: Response, next: NextFunction) => {
     const { orderId } = req.query;
@@ -87,10 +88,14 @@ export const createPayment = async (req: Request, res: Response, next: NextFunct
                     totalAmount: totalOrder,
                     paidAt: new Date(),
                     status: "paid"
-
                 }
             })
-        ])
+        ]);
+
+        io.emit("order:statusUpdated", updateOrder);
+        const revenue = await calculateMonthlyRevenue();
+        io.emit("revenue:updated", revenue);
+
         return res.status(201).json({
             message: "Success payment",
             data: {
@@ -99,7 +104,7 @@ export const createPayment = async (req: Request, res: Response, next: NextFunct
                 totalOrder,
                 change,
             }
-        })
+        });
     } catch (error) {
         next(error);
     }

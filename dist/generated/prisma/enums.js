@@ -14,7 +14,8 @@ export const Role = {
 export const service_status = {
     waiting: 'waiting',
     in_service: 'in_service',
-    completed: 'completed'
+    completed: 'completed',
+    cancelled: 'cancelled'
 };
 export const payment_status = {
     unpaid: 'unpaid',

@@ -102,6 +102,7 @@ export const CustomerScalarFieldEnum = {
     email: 'email',
     phone: 'phone',
     profilePicture: 'profilePicture',
+    userId: 'userId',
     created_at: 'created_at',
     updated_at: 'updated_at'
 };
@@ -143,6 +144,7 @@ export const ServicesScalarFieldEnum = {
     duration: 'duration',
     price: 'price',
     image: 'image',
+    isActive: 'isActive',
     created_at: 'created_at',
     updated_at: 'updated_at'
 };

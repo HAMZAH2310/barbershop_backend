@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma";
 import { uploadToCloudinary } from "../../lib/uploadtoCloudinary";
+import { io } from "../index";
 export const registerBarber = async (req, res, next) => {
     try {
         const { name, phone } = req.body;
@@ -8,16 +9,16 @@ export const registerBarber = async (req, res, next) => {
             const result = await uploadToCloudinary(req.file.buffer, "barber");
             picture = result.secure_url;
         }
-        if (!name || !phone) {
+        if (!name) {
             return res.status(400).json({
-                message: "Field name dan phone harus diisi"
+                message: "Field name harus diisi"
             });
         }
         ;
         const newBarber = await prisma.barber.create({
             data: {
                 name,
-                phone: Number(phone),
+                phone: phone ? Number(phone) : 0,
                 ...(picture && { picture })
             }
         });
@@ -65,6 +66,7 @@ export const updateStatusBarber = async (req, res, next) => {
             where: { id: barber.id },
             data: { status },
         });
+        io.emit("barber:statusUpdated", updatedBarber);
         return res.status(200).json({
             message: "Status barber berhasil diupdate",
             data: updatedBarber

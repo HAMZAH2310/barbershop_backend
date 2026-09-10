@@ -1,4 +1,6 @@
 import { prisma } from "../../lib/prisma";
+import { io } from "../index";
+import { calculateMonthlyRevenue } from "../lib/revenue";
 import generateInvoice from "../utils/generateInvoice";
 export const getPayment = async (req, res, next) => {
     const { orderId } = req.query;
@@ -70,6 +72,9 @@ export const createPayment = async (req, res, next) => {
                 }
             })
         ]);
+        io.emit("order:statusUpdated", updateOrder);
+        const revenue = await calculateMonthlyRevenue();
+        io.emit("revenue:updated", revenue);
         return res.status(201).json({
             message: "Success payment",
             data: {

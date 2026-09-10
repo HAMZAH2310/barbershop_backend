@@ -9,6 +9,7 @@ import orderItemRoute from "./orderItem.route";
 import paymentRoute from "./payment.route";
 import invoiceRoute from "./invoice.route";
 import midtransRoute from "./midtrans.route";
+import revenueRoute from "./revenue.route";
 
 const app = Router();
 
@@ -22,6 +23,7 @@ app.use("/barber", barberRoute);
 app.use("/order", orderRoute);
 app.use("/order-item", orderItemRoute);
 app.use("/payment", paymentRoute);
-app.use("/invoice", invoiceRoute)
+app.use("/invoice", invoiceRoute);
+app.use("/revenue", revenueRoute);
 
 export default app;
